@@ -10,15 +10,16 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async signup(email: string, password: string) {
-    // Check if user already exists
-    const existing = await this.userService.findByEmail(email);
-    if (existing) {
-      throw new ConflictException('User already exists');
+  async signup(username: string, email: string, password: string) {
+    // Check if user already exists by email or username
+    const existingByEmail = await this.userService.findByEmail(email);
+    const existingByUsername = await this.userService.userModel.findOne({ username }).exec();
+    if (existingByEmail || existingByUsername) {
+      throw new ConflictException('User with this email or username already exists');
     }
     // Hash password
     const hashed = await bcrypt.hash(password, 10);
-    return this.userService.create(email, hashed);
+    return this.userService.create(username, email, hashed);
   }
 
   async login(email: string, password: string) {
