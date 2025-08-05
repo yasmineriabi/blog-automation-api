@@ -1,4 +1,4 @@
-import { Exclude, Expose, ExposeOptions, Transform } from 'class-transformer';
+import { Expose, ExposeOptions, Transform } from 'class-transformer';
 import { IsMongoId } from 'class-validator';
 
 export function TransformMongoId(
@@ -57,4 +57,4 @@ export class BlogSerializer {
   constructor(partial: Partial<BlogSerializer>) {
     Object.assign(this, partial);
   }
-} 
+}

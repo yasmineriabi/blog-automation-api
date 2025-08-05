@@ -1,41 +1,44 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import axios from 'axios';
-import { BlogSerializer } from '../serilizations/BlogSerializer';
-import { Blog } from '../models/blog.schema';
-import { Topic } from '../../topics/models/topic.schema';
 import { plainToInstance } from 'class-transformer';
+import { Model } from 'mongoose';
+
+import { Topic, TopicDocument } from '../../topics/models/topic.schema';
+import { Blog, BlogDocument } from '../models/blog.schema';
+import { BlogSerializer } from '../serilizations/BlogSerializer';
+import { DifyBlog } from '../types/blog.type';
 
 @Injectable()
 export class BlogsService {
   constructor(
-    @InjectModel('Blog') public readonly blogModel: Model<Blog>,
-    @InjectModel('Topic') public readonly topicModel: Model<Topic>
+    @InjectModel(Blog.name) readonly blogModel: Model<BlogDocument>,
+    @InjectModel(Topic.name) readonly topicModel: Model<TopicDocument>,
+    private readonly logger = new Logger(BlogsService.name),
   ) {}
 
   async addBlog(): Promise<BlogSerializer> {
     try {
-      const response = await this.callDifyWorkflow();
-      console.log('Dify response:', response);
-      
-      const blog = response.data.outputs.text;
-      console.log('Blog type:', typeof blog);
-      console.log('Blog content:', blog);
+      const blogRes = await this.callDifyWorkflow();
+      this.logger.log('Dify response:', blogRes);
+
+      const blog = blogRes.text.content;
+      this.logger.log('Blog type:', typeof blog);
+      this.logger.log('Blog content:', blog);
 
       let jsonBlog;
-      
+
       // Check if blog is already an object or a string
       if (typeof blog === 'object' && blog !== null) {
         // It's already an object - use directly
         jsonBlog = blog;
-        console.log('Using blog as object directly');
+        this.logger.log('Using blog as object directly');
       } else if (typeof blog === 'string') {
         // It's a string - parse it
         try {
           jsonBlog = JSON.parse(blog);
-        } catch (parseError) {
-          console.log('JSON parse failed, trying to clean...');
+        } catch (_error) {
+          this.logger.error('JSON parse failed, trying to clean...');
           const cleanedBlog = blog.replace(/\\n/g, ' ').replace(/\n/g, ' ');
           jsonBlog = JSON.parse(cleanedBlog);
         }
@@ -43,26 +46,26 @@ export class BlogsService {
         throw new Error(`Unexpected blog type: ${typeof blog}`);
       }
 
-      console.log('Final jsonBlog:', jsonBlog);
+      this.logger.log('Final jsonBlog:', jsonBlog);
 
-      const createdBlog = await new this.blogModel({ 
-        ...jsonBlog, 
-        created_by: '123' 
+      const createdBlog = await new this.blogModel({
+        ...jsonBlog,
+        created_by: '123',
       }).save();
 
       // Update the corresponding topic's is_assigned to true
       if (jsonBlog.topicid) {
-        console.log('Updating topic with ID:', jsonBlog.topicid);
-        
+        this.logger.log('Updating topic with ID:', jsonBlog.topicid);
+
         const updateResult = await this.topicModel.updateOne(
           { _id: jsonBlog.topicid },
-          { is_assigned: true }
+          { is_assigned: true },
         );
-        
-        console.log('Topic update result:', updateResult);
-        console.log('Topic updated successfully');
+
+        this.logger.log('Topic update result:', updateResult);
+        this.logger.log('Topic updated successfully');
       } else {
-        console.log('No topicid found, skipping topic update');
+        this.logger.log('No topicid found, skipping topic update');
       }
 
       return plainToInstance(BlogSerializer, createdBlog, {
@@ -74,12 +77,12 @@ export class BlogsService {
     }
   }
 
-  async callDifyWorkflow() {
-    const url = 'http://192.168.0.181/v1/workflows/run';
+  async callDifyWorkflow(): Promise<DifyBlog> {
+    const url = `${process.env.DIFY_API_URL}/v1/workflows/run`;
     const apiKey = process.env.DIFY_API_KEY_blog_generator;
 
     const headers = {
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     };
 
@@ -91,7 +94,7 @@ export class BlogsService {
 
     try {
       const response = await axios.post(url, data, { headers });
-      return response.data;
+      return response.data.data.outputs.text;
     } catch (error) {
       throw new Error(`Dify workflow call failed: ${error.message}`);
     }

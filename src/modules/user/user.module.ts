@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { UserController } from './controllers/user.controller';
-import { UserService } from './services/user.service';
-import { MONGOOSE_MODELS } from '../../databases';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { MongooseModule } from '@nestjs/mongoose';
+
+import { MONGOOSE_MODELS } from '../../databases';
+
+import { UserController } from './controllers/user.controller';
+import { UserService } from './services/user.service';
 
 @Module({
   imports: [
@@ -23,4 +25,4 @@ import { JwtModule } from '@nestjs/jwt';
   providers: [UserService],
   exports: [UserModule, UserService],
 })
-export class UserModule {} 
+export class UserModule {}

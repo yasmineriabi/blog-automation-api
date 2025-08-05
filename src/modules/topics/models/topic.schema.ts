@@ -15,8 +15,7 @@ export class Topic {
   @Prop({ default: '123' })
   created_by: string;
 
-
-  @Prop({ default: false})
+  @Prop({ default: false })
   is_assigned: boolean;
 
   @Prop({ default: false })
@@ -25,4 +24,4 @@ export class Topic {
 
 export type TopicDocument = HydratedDocument<Topic>;
 
-export const TopicSchema = SchemaFactory.createForClass(Topic); 
+export const TopicSchema = SchemaFactory.createForClass(Topic);
