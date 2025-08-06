@@ -74,25 +74,19 @@ export class TopicsService implements OnModuleDestroy {
       // Load the USE model (cached)
       const model = await this.getModel();
 
-      let cosineSim = 0;
-
       // Use tf.tidy to automatically dispose of intermediate tensors
-      await tf.tidy(() => {
-        // Get embeddings for both texts
-        const embeddings = model.embed([text1, text2]);
+      // First, get the embeddings outside tf.tidy
+      const embeddings = await model.embed([text1, text2]);
 
-        // Compute cosine similarity
+      // Then, compute similarity inside tf.tidy
+      const cosineSim = tf.tidy(() => {
+        const emb1 = embeddings.slice([0, 0], [1, -1]);
+        const emb2 = embeddings.slice([1, 0], [1, -1]);
+
         const similarity = tf.losses
-          .cosineDistance(
-            embeddings.slice([0, 0], [1, -1]),
-            embeddings.slice([1, 0], [1, -1]),
-            1,
-          )
+          .cosineDistance(emb1, emb2, 1)
           .dataSync()[0];
-
-        cosineSim = 1 - similarity;
-
-        // embeddings will be automatically disposed by tf.tidy
+        return 1 - similarity;
       });
 
       this.logger.log(
