@@ -18,47 +18,61 @@ export class BlogsService {
     @InjectModel(Topic.name) readonly topicModel: Model<TopicDocument>,
   ) {}
 
-  async addBlog(): Promise<BlogSerializer> {
+  async addBlog(): Promise<BlogSerializer[]> {
     try {
       console.warn('immmmm hereeeeeee');
 
       const blogRes = await this.callDifyWorkflow();
-      this.logger.log('Dify blogRes: content', blogRes.content);
+      this.logger.log('Dify blogRes received');
 
-      const blog = blogRes.content;
-      this.logger.log('Blog type:', typeof blog);
-      this.logger.log('Blog content:', blog);
+      // Parse the JSON string to get the array of blogs
+      const blogsArray = JSON.parse(blogRes.data.outputs.text);
 
-      const createdBlog = await new this.blogModel({
-        ...blogRes,
-        created_by: '123',
-      }).save();
-
-      // Update the corresponding topic's is_assigned to true
-      if (blogRes.topicid) {
-        this.logger.log('Updating topic with ID:', blogRes.topicid);
-
-        const updateResult = await this.topicModel.updateOne(
-          { _id: blogRes.topicid },
-          { is_assigned: true },
+      if (!Array.isArray(blogsArray)) {
+        throw new Error(
+          'Expected array of blogs from Dify, but received different format',
         );
-
-        this.logger.log('Topic update result:', updateResult);
-        this.logger.log('Topic updated successfully');
-      } else {
-        this.logger.log('No topicid found, skipping topic update');
       }
 
-      return plainToInstance(BlogSerializer, createdBlog, {
-        excludeExtraneousValues: true,
-      });
+      this.logger.log(`Processing ${blogsArray.length} blogs from Dify...`);
+
+      const savedBlogs: Blog[] = [];
+
+      for (const blogData of blogsArray) {
+        // Create and save each blog
+        const createdBlog = await new this.blogModel({
+          ...blogData,
+          created_by: '123', // Replace with actual user ID
+        }).save();
+
+        // Update the corresponding topic's is_assigned to true
+        if (blogData.topicid) {
+          this.logger.log('Updating topic with ID:', blogData.topicid);
+
+          const updateResult = await this.topicModel.updateOne(
+            { _id: blogData.topicid },
+            { is_assigned: true },
+          );
+
+          this.logger.log('Topic update result:', updateResult);
+        }
+
+        savedBlogs.push(createdBlog);
+      }
+
+      // Return all saved blogs
+      return savedBlogs.map((blog) =>
+        plainToInstance(BlogSerializer, blog, {
+          excludeExtraneousValues: true,
+        }),
+      );
     } catch (error) {
       console.error('Error in addBlog:', error);
-      throw new Error(`Failed to add blog: ${error.message}`);
+      throw new Error(`Failed to add blogs: ${error.message}`);
     }
   }
 
-  async callDifyWorkflow(): Promise<DifyBlog> {
+  async callDifyWorkflow(): Promise<any> {
     const url = `${process.env.DIFY_API_URL}/workflows/run`;
     const apiKey = process.env.DIFY_API_KEY_blog_generator;
 
@@ -67,8 +81,20 @@ export class BlogsService {
       'Content-Type': 'application/json',
     };
 
+    // Fetch up to 10 unassigned topics from the database
+    const unassignedTopics = await this.topicModel
+      .find({ is_assigned: false }, { _id: 1, topic: 1 })
+      .limit(10)
+      .lean();
+    const topicInputs = unassignedTopics.map((t) => ({
+      topicid: t._id.toString(),
+      topic: t.topic,
+    }));
+
     const data = {
-      inputs: {},
+      inputs: {
+        topics: JSON.stringify(topicInputs),
+      },
       response_mode: 'blocking',
       user: 'abc-123',
     };
@@ -76,7 +102,7 @@ export class BlogsService {
     try {
       const response = await axios.post(url, data, { headers });
       this.logger.log('Dify response:', response.data);
-      return response.data.data.outputs.text;
+      return response.data;
     } catch (error) {
       throw new Error(`Dify workflow call failed: ${error.message}`);
     }

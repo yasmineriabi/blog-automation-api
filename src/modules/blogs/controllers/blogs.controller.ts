@@ -8,7 +8,7 @@ export class BlogsController {
   constructor(private readonly blogsService: BlogsService) {}
 
   @Post('add-blog')
-  async addBlog(): Promise<BlogSerializer> {
+  async addBlog(): Promise<BlogSerializer[]> {
     try {
       return this.blogsService.addBlog();
     } catch (error) {

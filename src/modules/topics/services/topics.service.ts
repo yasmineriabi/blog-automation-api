@@ -139,85 +139,103 @@ export class TopicsService implements OnModuleDestroy {
   // Main method to add topics
   async addTopics(): Promise<TopicSerializer[]> {
     try {
-      const difytopics = await this.callDifyWorkflow();
-      this.logger.log('Dify response received');
-
-      if (!Array.isArray(difytopics)) {
-        throw new Error(
-          'Expected array of topics from Dify, but received different format',
-        );
-      }
-
-      this.logger.log(`🚀 Processing ${difytopics.length} topics from Dify...`);
-
+      const TARGET_COUNT = 10;
+      const MAX_FETCH_ATTEMPTS = 5;
+      let totalAdded = 0;
+      let fetchAttempts = 0;
       const savedTopics: Topic[] = [];
       let skippedCount = 0;
 
-      // Pre-load the model for performance
-      await this.getModel();
+      while (totalAdded < TARGET_COUNT && fetchAttempts < MAX_FETCH_ATTEMPTS) {
+        fetchAttempts++;
+        const difytopics = await this.callDifyWorkflow();
+        this.logger.log(`Dify response received (attempt ${fetchAttempts})`);
 
-      for (const [index, topic] of difytopics.entries()) {
-        // Validate topic text presence
-        if (!topic?.topic || typeof topic.topic !== 'string') {
-          this.logger.warn(
-            `⚠️ Skipping invalid topic at index ${index + 1}: Missing or invalid "topic" field.`,
+        if (!Array.isArray(difytopics)) {
+          throw new Error(
+            'Expected array of topics from Dify, but received different format',
           );
-          skippedCount++;
-          continue;
         }
-
-        const topicWithDefaults = {
-          ...topic,
-          created_by: '123', // Replace with actual user ID
-          is_assigned: false,
-          isApproved: false,
-        };
-
-        // Fetch existing topics by domain directly from database (no HTTP call)
-        const existingTopicsData = await this.getFilteredTopicsByDomain(
-          topic.domain,
-        );
-        const existingTopics = existingTopicsData.map((t) => t.topic);
 
         this.logger.log(
-          `🌐 Found ${existingTopics.length} existing topics in domain "${topic.domain}"`,
+          `🚀 Processing ${difytopics.length} topics from Dify...`,
         );
 
-        // Check for similarity with existing topics
-        if (existingTopics.length > 0) {
-          this.logger.log(
-            `🔍 Checking similarity for topic ${index + 1}: "${topic.topic}"`,
-          );
-          const isSimilar = await this.checkTopicSimilarity(
-            topicWithDefaults,
-            existingTopics,
-          );
+        // Pre-load the model for performance
+        await this.getModel();
 
-          if (isSimilar) {
-            skippedCount++;
-            this.logger.log(
-              `⏭️  Skipped topic ${index + 1}/${difytopics.length} due to similarity`,
+        for (const [index, topic] of difytopics.entries()) {
+          if (totalAdded >= TARGET_COUNT) break;
+
+          // Validate topic text presence
+          if (!topic?.topic || typeof topic.topic !== 'string') {
+            this.logger.warn(
+              `⚠️ Skipping invalid topic at index ${index + 1}: Missing or invalid "topic" field.`,
             );
-            continue; // Skip this topic
+            skippedCount++;
+            continue;
           }
-        }
 
-        // If no similar topics found, proceed with insertion
-        try {
-          const saved = await this.topicModel.create(topicWithDefaults);
+          const topicWithDefaults = {
+            ...topic,
+            created_by: '123', // Replace with actual user ID
+            is_assigned: false,
+            isApproved: false,
+          };
+
+          // Fetch existing topics by domain directly from database (no HTTP call)
+          const existingTopicsData = await this.getFilteredTopicsByDomain(
+            topic.domain,
+          );
+          const existingTopics = existingTopicsData.map((t) => t.topic);
+
           this.logger.log(
-            `✅ Inserted topic ${index + 1}/${difytopics.length}: ${saved.topic}`,
+            `🌐 Found ${existingTopics.length} existing topics in domain "${topic.domain}"`,
           );
-          savedTopics.push(saved);
-        } catch (insertErr) {
-          this.logger.error(
-            `❌ Failed to insert topic ${index + 1}: ${insertErr.message}`,
-          );
+
+          // Check for similarity with existing topics
+          if (existingTopics.length > 0) {
+            this.logger.log(
+              `🔍 Checking similarity for topic ${index + 1}: "${topic.topic}"`,
+            );
+            const isSimilar = await this.checkTopicSimilarity(
+              topicWithDefaults,
+              existingTopics,
+            );
+
+            if (isSimilar) {
+              skippedCount++;
+              this.logger.log(
+                `⏭️  Skipped topic ${index + 1}/${difytopics.length} due to similarity`,
+              );
+              continue; // Skip this topic
+            }
+          }
+
+          // If no similar topics found, proceed with insertion
+          try {
+            const saved = await this.topicModel.create(topicWithDefaults);
+            this.logger.log(
+              `✅ Inserted topic ${index + 1}/${difytopics.length}: ${saved.topic}`,
+            );
+            savedTopics.push(saved);
+            totalAdded++;
+          } catch (insertErr) {
+            this.logger.error(
+              `❌ Failed to insert topic ${index + 1}: ${insertErr.message}`,
+            );
+          }
         }
       }
 
+      if (totalAdded < TARGET_COUNT) {
+        this.logger.warn(
+          `⚠️ Only ${totalAdded} unique topics were added after ${fetchAttempts} fetch attempts.`,
+        );
+      }
+
       this.logger.log(
-        `🎯 Results: ${savedTopics.length} inserted, ${skippedCount} skipped due to similarity or invalid data, ${difytopics.length - savedTopics.length - skippedCount} failed to insert`,
+        `🎯 Results: ${savedTopics.length} inserted, ${skippedCount} skipped due to similarity or invalid data, ${totalAdded - savedTopics.length} failed to insert`,
       );
 
       return savedTopics.map((topic) =>
