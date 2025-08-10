@@ -17,8 +17,12 @@ export class User {
   @Prop({ default: '' })
   avatar: string;
 
-  @Prop({ type: String, enum: Role, default: Role.USER })
-  role: Role;
+  @Prop({
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user',
+  })
+  role: string;
 
   @Prop({ default: false })
   isVerified: boolean;
