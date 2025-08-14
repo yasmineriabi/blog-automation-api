@@ -1,10 +1,11 @@
-import mongoose from 'mongoose';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { Connection } from 'mongoose';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
+import mongoose from 'mongoose';
+import { Connection } from 'mongoose';
+
+import { AppModule } from './app.module';
 
 mongoose.set('debug', true);
 
@@ -28,12 +29,14 @@ async function bootstrap() {
   // Wait for the Mongoose connection to be ready
   const connection = app.get<Connection>(getConnectionToken());
   connection.once('open', () => {
-    console.log('✅ Connected to MongoDB!');
+    Logger.log('✅ Connected to MongoDB!');
   });
   connection.on('error', (err) => {
-    console.error('❌ MongoDB connection error:', err);
+    Logger.error('❌ MongoDB connection error:', err);
   });
 
   await app.listen(3000); // Already set to port 3000
 }
-bootstrap();
+void bootstrap().then(() =>
+  console.info(`API is running on port ${process.env.PORT || 3000}`),
+);

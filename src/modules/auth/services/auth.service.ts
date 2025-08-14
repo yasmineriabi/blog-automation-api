@@ -1,11 +1,8 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
-import axios from 'axios';
 import * as bcrypt from 'bcryptjs';
 import { Model } from 'mongoose';
-
-import { UserSerializer } from 'src/modules/user/serilizations/UserSerializer';
 
 import { CreateUserDto } from '../../user/dto/createUser.dto';
 import { User, UserDocument } from '../../user/models/user.schema';
@@ -43,7 +40,7 @@ export class AuthService {
       await newUser.save();
 
       // Create fanom rewards record for the new user
-  
+
       return { message: 'User created successfully' };
     } catch (e) {
       throw new Error(e.message as string);
@@ -104,6 +101,4 @@ export class AuthService {
 
     return user;
   }
-
-
 }
