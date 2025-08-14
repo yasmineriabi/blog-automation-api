@@ -52,7 +52,7 @@ export class AuthService {
       const user = await this.validateUser(loginUser.email, loginUser.password);
 
       const token = await this.jwtService.signAsync(
-        { user: user._id },
+        { user: user._id, role: user.role },
         { secret: process.env.JWT_SECRET, expiresIn: '4d' },
       );
       return {
