@@ -11,7 +11,7 @@ export class BlogsController {
   constructor(private readonly blogsService: BlogsService) {}
 
   @Post('add-blog')
-  async addBlog(): Promise<BlogSerializer[]> {
+  async addBlog(): Promise<BlogSerializer[] | { message: string }> {
     try {
       return this.blogsService.addBlog();
     } catch (error) {
@@ -34,10 +34,10 @@ export class BlogsController {
   @Role('admin')
   @Post('admin/pending-blogs/approve')
   async approveBlog(
-    @Body() body: { blogId: string },
+    @Body() body: { blogId: string; username: string },
   ): Promise<{ message: string }> {
     try {
-      return this.blogsService.approveBlog(body.blogId);
+      return this.blogsService.approveBlog(body.blogId, body.username);
     } catch (error) {
       throw new Error(`Failed to approve blog: ${error.message}`);
     }

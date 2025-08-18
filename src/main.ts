@@ -4,6 +4,7 @@ import { getConnectionToken } from '@nestjs/mongoose';
 import * as express from 'express';
 import mongoose from 'mongoose';
 import { Connection } from 'mongoose';
+import * as path from 'path';
 
 import { AppModule } from './app.module';
 
@@ -26,6 +27,9 @@ async function bootstrap() {
       },
     }),
   );
+
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   // Wait for the Mongoose connection to be ready
   const connection = app.get<Connection>(getConnectionToken());
   connection.once('open', () => {
