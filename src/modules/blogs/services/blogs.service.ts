@@ -18,12 +18,17 @@ export class BlogsService {
     @InjectModel(Topic.name) readonly topicModel: Model<TopicDocument>,
   ) {}
 
-  async addBlog(): Promise<BlogSerializer[]> {
+  async addBlog(): Promise<BlogSerializer[] | { message: string }> {
     try {
       console.warn('immmmm hereeeeeee');
 
-      const blogRes: DifyBlogResponse = await this.callDifyWorkflow();
+      const blogRes = await this.callDifyWorkflow();
       this.logger.log('Dify blogRes received');
+
+      // Check if it's a message response (no topics available)
+      if ('message' in blogRes) {
+        return blogRes;
+      }
 
       // Parse the JSON string to get the array of blogs
       const blogsArray: DifyBlog[] = JSON.parse(blogRes.data.outputs.text);
@@ -81,7 +86,10 @@ export class BlogsService {
     );
   }
 
-  async approveBlog(blogId: string): Promise<{ message: string }> {
+  async approveBlog(
+    blogId: string,
+    username: string,
+  ): Promise<{ message: string }> {
     try {
       const blog = await this.blogModel.findById(blogId);
       if (!blog) {
@@ -92,7 +100,10 @@ export class BlogsService {
         throw new Error('Blog is not in pending status');
       }
 
-      await this.blogModel.findByIdAndUpdate(blogId, { status: 'approved' });
+      await this.blogModel.findByIdAndUpdate(blogId, {
+        status: 'approved',
+        approvedby: username,
+      });
       return { message: 'Blog approved successfully' };
     } catch (error) {
       throw new Error(`Failed to approve blog: ${error.message}`);
@@ -173,6 +184,8 @@ export class BlogsService {
             topicid: 1,
             created_by: 1,
             viewcount: 1,
+            createdat: 1,
+            approvedby: 1,
             domain: '$topic.domain',
             topic: '$topic.topic',
           },
@@ -247,7 +260,7 @@ export class BlogsService {
     }
   }
 
-  async callDifyWorkflow(): Promise<DifyBlogResponse> {
+  async callDifyWorkflow(): Promise<DifyBlogResponse | { message: string }> {
     const url = `${process.env.DIFY_API_URL}/workflows/run`;
     const apiKey = process.env.DIFY_API_KEY_blog_generator;
 
@@ -256,11 +269,17 @@ export class BlogsService {
       'Content-Type': 'application/json',
     };
 
-    // Fetch up to 10 unassigned topics from the database
+    // Fetch up to 2 unassigned topics from the database
     const unassignedTopics = await this.topicModel
       .find({ is_assigned: false }, { _id: 1, topic: 1 })
-      .limit(10)
+      .limit(2)
       .lean();
+
+    // Check if there are any unassigned topics
+    if (unassignedTopics.length === 0) {
+      return { message: 'No unassigned topics available for blog generation' };
+    }
+
     const topicInputs = unassignedTopics.map((t) => ({
       topicid: t._id.toString(),
       topic: t.topic,

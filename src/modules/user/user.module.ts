@@ -7,6 +7,7 @@ import { MONGOOSE_MODELS } from '../../databases';
 
 import { UserController } from './controllers/user.controller';
 import { UserService } from './services/user.service';
+import { FileUploadService } from './services/file-upload.service';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { UserService } from './services/user.service';
     }),
   ],
   controllers: [UserController],
-  providers: [UserService],
+  providers: [UserService, FileUploadService],
   exports: [UserModule, UserService],
 })
 export class UserModule {}
